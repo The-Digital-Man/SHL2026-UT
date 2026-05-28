@@ -178,11 +178,17 @@ class LMDBBuilder:
 
     # ---------- normalization ----------
 
-    def compute_global_channel_max(self, modes=("train", "validation", "test")):
+    def compute_global_channel_max(self, modes=("train", "validation")):
         """
         First pass: compute global per-channel maxima across all frames and time.
         Returns channel_max shaped (C,1).
         """
+        
+        # SAFETY CHECK
+        if "test" in modes:
+            print("WARNING: 'test' data detected in normalization! Removing it to prevent data leakage.")
+            modes = tuple(m for m in modes if m != "test")
+
         channel_max = None
 
         for _, _, frame, _ in tqdm(self._iter_all_frames(modes), desc="Scan for global channel max"):
@@ -201,13 +207,13 @@ class LMDBBuilder:
 
             channel_max = np.maximum(channel_max, this_max)
 
-        if channel_max is None:
-            raise RuntimeError("No frames found. Check root_dir/modes structure and file contents.")
+            if channel_max is None:
+                raise RuntimeError("No frames found. Check root_dir/modes structure and file contents.")
 
         # avoid division by zero
         channel_max = np.maximum(channel_max, self.eps).astype(np.float32)
         return channel_max
-
+        
     # ---------- LMDB writing ----------
 
     def _store_entry(self, txn, entry):
@@ -223,7 +229,8 @@ class LMDBBuilder:
           2) write normalized frames into LMDB
         """
         if normalize:
-            channel_max = self.compute_global_channel_max(modes=modes)
+            norm_modes = tuple(m for m in modes if m != "test")
+            channel_max = self.compute_global_channel_max(modes=norm_modes)
             self.meta["norm"] = {
                 "type": "global_channel_max",
                 "channel_max": channel_max  # (C,1) float32
@@ -269,7 +276,7 @@ if __name__ == "__main__":
     builder = LMDBBuilder(
         root_dir='',
         lmdb_path='',
-        preprocessing = True,
+        preprocessing = False, # Changed 
     )
 
     builder.build(modes=("train", "validation", "test"), normalize=True)
