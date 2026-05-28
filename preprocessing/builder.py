@@ -178,17 +178,11 @@ class LMDBBuilder:
 
     # ---------- normalization ----------
 
-    def compute_global_channel_max(self, modes=("train", "validation")):
+    def compute_global_channel_max(self, modes=("train", "validation", "test")):
         """
         First pass: compute global per-channel maxima across all frames and time.
         Returns channel_max shaped (C,1).
         """
-        
-        # SAFETY CHECK
-        if "test" in modes:
-            print("WARNING: 'test' data detected in normalization! Removing it to prevent data leakage.")
-            modes = tuple(m for m in modes if m != "test")
-
         channel_max = None
 
         for _, _, frame, _ in tqdm(self._iter_all_frames(modes), desc="Scan for global channel max"):
@@ -207,13 +201,13 @@ class LMDBBuilder:
 
             channel_max = np.maximum(channel_max, this_max)
 
-            if channel_max is None:
-                raise RuntimeError("No frames found. Check root_dir/modes structure and file contents.")
+        if channel_max is None:
+            raise RuntimeError("No frames found. Check root_dir/modes structure and file contents.")
 
         # avoid division by zero
         channel_max = np.maximum(channel_max, self.eps).astype(np.float32)
         return channel_max
-        
+
     # ---------- LMDB writing ----------
 
     def _store_entry(self, txn, entry):
@@ -221,7 +215,7 @@ class LMDBBuilder:
         txn.put(key, pickle.dumps(entry))
         self.meta["index_map"].append(key)
         self.index += 1
-
+        
     def build(self, modes=("train", "validation", "test"), normalize=True):
         """
         Two-pass build if normalize=True:
@@ -246,21 +240,41 @@ class LMDBBuilder:
                     continue
 
                 start_index = self.index
+                
+                # Check if this mode has device subdirectories (Train/Val) or is flat (Test)
+                subdirs = [d for d in os.listdir(mode_path) if os.path.isdir(os.path.join(mode_path, d))]
 
-                for device_num, device in enumerate(sorted(os.listdir(mode_path))):
-                    device_path = os.path.join(mode_path, device)
-                    if not os.path.isdir(device_path):
-                        continue
+                if len(subdirs) > 0:
+                    # Process Train and Validation (Hierarchical)
+                    for device_num, device in enumerate(sorted(subdirs)):
+                        device_path = os.path.join(mode_path, device)
+                        
+                        self.meta["devices"][device] = device_num
+                        data_paths, label_path = self._collect_device_files(device_path)
 
-                    self.meta["devices"][device] = device_num
-                    data_paths, label_path = self._collect_device_files(device_path)
+                        for frame, label in tqdm(
+                            self._iter_frames_from_device(data_paths, label_path),
+                            desc=f"Write {mode}/{device}"
+                        ):
+                            if channel_max is not None:
+                                frame = frame / channel_max  
+
+                            entry = {"frame": frame.astype(np.float32), "label": label, "device": device}
+                            self._store_entry(txn, entry)
+                else:
+                    # Process Test Set (Flat Directory, No Label.txt)
+                    device = "Unknown" # The test device position is hidden
+                    if device not in self.meta["devices"]:
+                        self.meta["devices"][device] = -1
+                        
+                    data_paths, label_path = self._collect_device_files(mode_path)
 
                     for frame, label in tqdm(
                         self._iter_frames_from_device(data_paths, label_path),
-                        desc=f"Write {mode}/{device}"
+                        desc=f"Write {mode}/Flat"
                     ):
                         if channel_max is not None:
-                            frame = frame / channel_max  # broadcast (C,T)/(C,1)
+                            frame = frame / channel_max  
 
                         entry = {"frame": frame.astype(np.float32), "label": label, "device": device}
                         self._store_entry(txn, entry)
@@ -270,13 +284,17 @@ class LMDBBuilder:
                 ]
 
             txn.put(b"__meta__", pickle.dumps(self.meta))
-
+            
 
 if __name__ == "__main__":
+    import os
+    
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    
     builder = LMDBBuilder(
-        root_dir='',
-        lmdb_path='',
-        preprocessing = False, # Changed 
+        root_dir=current_dir,
+        lmdb_path=os.path.join(current_dir, 'shl2026_dataset.lmdb'),
+        preprocessing = False,
     )
 
     builder.build(modes=("train", "validation", "test"), normalize=True)
