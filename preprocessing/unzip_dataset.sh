@@ -1,5 +1,15 @@
-# Define the target SHL 2026 zip files
+#!/bin/bash
 # These should be downloaded from -> http://www.shl-dataset.org/challenge-2026/
+
+# Download
+# wget http://www.shl-dataset.org/wp-content/uploads/SHLChallenge2026/SHL-2026-Train_Bag.zip
+# wget http://www.shl-dataset.org/wp-content/uploads/SHLChallenge2026/SHL-2026-Train_Hand.zip
+# wget http://www.shl-dataset.org/wp-content/uploads/SHLChallenge2026/SHL-2026-Train_Hips.zip
+# wget http://www.shl-dataset.org/wp-content/uploads/SHLChallenge2026/SHL-2026-Train_Torso.zip
+# wget http://www.shl-dataset.org/wp-content/uploads/SHLChallenge2026/SHL-2026-Validation.zip
+# wget http://www.shl-dataset.org/wp-content/uploads/SHLChallenge2026/SHL-2026-Test.zip
+
+# Define the target SHL 2026 zip files
 ZIP_FILES=(
     "SHL-2026-Train_Bag.zip"
     "SHL-2026-Train_Hand.zip"
