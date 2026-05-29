@@ -113,9 +113,9 @@ class LMDBBuilder:
         """
         Streams frames (C,T) and labels from one device directory.
         Drops any frame containing NaNs.
-
-        Important assumption: each line in each sensor file contains a *vector*
-        (a window) of comma-separated floats so that stacking yields (C,T).
+        
+        Important assumption: each line in each sensor file contains a
+        whitespace-separated vector (window) of floats so stacking yields (C,T).
         """
         data_files = [open(p, "r") for p in data_paths]
         label_file = open(label_path, "r") if os.path.exists(label_path) else None
@@ -132,12 +132,12 @@ class LMDBBuilder:
                 label_line = label_file.readline() if label_file is not None else None
 
                 frame = np.stack(
-                    [np.fromstring(line.strip(), sep=",", dtype=np.float32) for line in lines],
+                    [np.array(line.strip().split(), dtype=np.float32) for line in lines],
                     axis=0
                 )
 
                 if label_line is not None:
-                    arr = np.fromstring(label_line.strip(), sep=",", dtype=np.float32)
+                    arr = np.fromstring(label_line.strip(), sep=" ", dtype=np.float32)
                     label = int(arr[0] - 1) if len(arr) else -1
                 else:
                     label = -1
