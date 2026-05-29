@@ -175,7 +175,7 @@ class LMDBBuilder:
 
         filenames = sorted([
             f for f in os.listdir(device_path)
-            if f != "Label.txt"
+            if f != "Label.txt" and f.endswith(".txt")
         ])
 
         data_paths = [
@@ -240,8 +240,10 @@ class LMDBBuilder:
                 for line in lines:
 
                     try:
+                        # FIX: test is comma sep
+                        clean_line = line.replace(',', ' ')
                         vec = np.array(
-                            line.strip().split(),
+                            clean_line.strip().split(),
                             dtype=np.float32
                         )
 
@@ -294,11 +296,10 @@ class LMDBBuilder:
                     label = -1
 
                 # --------------------------------------------
-                # NaN / Inf removal
+                # NaN / Inf Handling
                 # --------------------------------------------
 
-                if not np.isfinite(frame).all():
-                    continue
+                frame = np.nan_to_num(frame, nan=0.0, posinf=0.0, neginf=0.0)
 
                 # --------------------------------------------
                 # Filtering
